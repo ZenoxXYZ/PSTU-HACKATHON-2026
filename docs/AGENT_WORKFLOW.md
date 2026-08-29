@@ -75,6 +75,11 @@ repository reconstruction
 
 Do not force independent review after every tiny workstream. Do not force a long teaching session after every small edit. Use proportionality.
 
+README lifecycle for challenge projects:
+`problem.md` approved -> `plan.md` approved -> `execute.md` initialized -> early README challenge transition -> implementation -> Golden Path stable -> final README reconciliation -> final review/freeze.
+
+A challenge project may start with the generic starter README. After approved requirements/design and execution initialization, transition `README.md` to project-facing challenge documentation without claiming unimplemented features. After the Golden Path and implementation are stable, reconcile `README.md` against verified repository behavior. `problem.md`, `plan.md`, `execute.md`, `review.md`, and code/evidence retain their existing roles.
+
 6. Planning Phase
 Meaningful workstreams begin in Plan Mode. Plan Mode is read-only.
 

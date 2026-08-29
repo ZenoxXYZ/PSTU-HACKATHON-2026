@@ -28,6 +28,8 @@ Use the smallest sequence that protects the critical path:
 
 Not every tiny task requires a fresh Reviewer or long reconstruction. Golden Path means the most important successful user journey that demonstrates the core value of the MVP. Identify it before implementation, use it to drive workstream priority and contracts, and refine it only when legitimate evidence or approved design changes require that. Public deployment is conditional, and local E2E remains a valid final path when official rules and demo needs allow it. Do not compress away verification of the critical path.
 
+For challenge repositories, let `README.md` begin as starter documentation, transition it after `problem.md` and `plan.md` are approved and `execute.md` is initialized, and reconcile it against verified behavior after the Golden Path/implementation stabilizes.
+
 ## 1. Starter Check
 
 ### Role
