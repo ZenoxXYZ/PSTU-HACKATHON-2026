@@ -45,6 +45,7 @@ def clean_accounts(postgresql_test_url: str, configure_postgresql_test_database:
     validate_test_database_url(postgresql_test_url)
     with database.engine.begin() as connection:
         connection.execute(text("DELETE FROM transfers"))
+        connection.execute(text("DELETE FROM money_requests"))
         connection.execute(text("DELETE FROM accounts"))
 
 

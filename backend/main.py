@@ -5,13 +5,14 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.errors import AppError
-from backend.routes import auth, transfers, users
+from backend.routes import auth, requests, transfers, users
 
 app = FastAPI(title="Money Movement Application")
 
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(transfers.router)
+app.include_router(requests.router)
 
 
 @app.exception_handler(AppError)

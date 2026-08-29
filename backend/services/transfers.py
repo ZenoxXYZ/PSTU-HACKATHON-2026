@@ -76,11 +76,13 @@ def execute_direct_transfer(
     first_id, second_id = _sort_account_ids(sender.id, recipient.id)
 
     # Step 6: Acquire PostgreSQL row locks in canonical order using SELECT ... FOR UPDATE
+    # populate_existing=True forces SQLAlchemy to refresh the identity-mapped instance
+    # from the committed DB state after the lock is acquired, preventing stale reads.
     first_account: Account = db.scalar(
-        select(Account).where(Account.id == first_id).with_for_update()
+        select(Account).where(Account.id == first_id).with_for_update().execution_options(populate_existing=True)
     )
     second_account: Account = db.scalar(
-        select(Account).where(Account.id == second_id).with_for_update()
+        select(Account).where(Account.id == second_id).with_for_update().execution_options(populate_existing=True)
     )
 
     # Ensure we have the correct sender/recipient references after locking

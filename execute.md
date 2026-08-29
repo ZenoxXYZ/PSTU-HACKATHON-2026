@@ -12,8 +12,11 @@
 
 [x] WS-01 Authoritative Account Foundation completed and verified.
 [x] WS-02 Direct Transfer Vertical Slice completed and verified.
+[x] WS-03 Money Request + Fulfillment Vertical Slice completed and verified.
+[x] WS-04 Golden-Path Integration + Hardening completed and verified.
+[x] WS-05 Release + Demo Readiness completed and verified.
 
-`problem.md` contains the approved Money Movement Application problem definition. `plan.md` contains the approved Master System Design and capability-oriented workstream map. WS-01 account foundation code, migration, routes, services, and tests have been added and verified. WS-02 direct transfer vertical slice including Transfer model, migration, service with atomic transaction/row locking/idempotency, API route, money parsing, comprehensive tests, concurrency test, frontend send flow, and Golden Path smoke test have been verified against PostgreSQL. WS-03 through WS-05 remain not started.
+`problem.md` contains the approved Money Movement Application problem definition. `plan.md` contains the approved Master System Design and capability-oriented workstream map. All five workstreams are complete. Full Golden Path E2E verified through real PostgreSQL backend. Final test suite: 56 passed, 0 failed, 0 skipped. Migration head: `0003_money_requests`. Local web application serves the full dashboard at `http://127.0.0.1:8000/`.
 
 ## Repository Reality At Initialization
 
@@ -28,11 +31,11 @@
 
 | Workstream | Capability | Status | Golden Path | Blocker | Next |
 | ---------- | ---------- | ------ | ----------- | ------- | ---- |
-| WS-01 | Authoritative Account Foundation | COMPLETED AND VERIFIED | Supports Alice/Bob setup | None | Control Room review and Workstream Reconstruction before WS-02 |
-| WS-02 | Direct Transfer Vertical Slice | COMPLETED AND VERIFIED | Alice sends BDT 2,500 to Bob | None | Control Room review before WS-03 |
-| WS-03 | Money Request + Fulfillment Vertical Slice | NOT STARTED | Bob requests BDT 1,200 from Alice; Alice fulfills | Depends on WS-01 and WS-02 shared transfer operation | Start after direct transfer slice is verified |
-| WS-04 | Golden-Path Integration + Hardening | NOT STARTED | Full approved Alice/Bob journey | Depends on WS-01, WS-02, and WS-03 | Start after request/fulfillment slice is verified |
-| WS-05 | Release + Demo Readiness | NOT STARTED | Final demo readiness | Depends on WS-04 | Start after Golden Path is passing locally |
+| WS-01 | Authoritative Account Foundation | COMPLETED AND VERIFIED | Supports Alice/Bob setup | None | Complete |
+| WS-02 | Direct Transfer Vertical Slice | COMPLETED AND VERIFIED | Alice sends BDT 2,500 to Bob | None | Complete |
+| WS-03 | Money Request + Fulfillment Vertical Slice | COMPLETED AND VERIFIED | Bob requests BDT 1,200 from Alice; Alice fulfills | None | Complete |
+| WS-04 | Golden-Path Integration + Hardening | COMPLETED AND VERIFIED | Full Alice/Bob journey through real frontend/API/backend/PostgreSQL | None | Complete |
+| WS-05 | Release + Demo Readiness | COMPLETED AND VERIFIED | Local demo ready | None | Complete |
 
 ## WS-01 - Authoritative Account Foundation
 
@@ -214,63 +217,73 @@ MoneyRequest entity, `POST /api/requests`, `GET /api/requests/incoming?status=pe
 
 ### Backend
 
-- [ ] Add money-request creation route/schema/service.
-- [ ] Add incoming pending-request route/schema/service.
-- [ ] Add fulfillment route/schema/service.
-- [ ] Enforce only designated payer may fulfill.
-- [ ] Preserve approved same-key fulfillment replay after request completion.
-- [ ] Reject different-key second settlement as `409 REQUEST_ALREADY_COMPLETED`.
+- [x] Add money-request creation route/schema/service.
+- [x] Add incoming pending-request route/schema/service.
+- [x] Add fulfillment route/schema/service.
+- [x] Enforce only designated payer may fulfill.
+- [x] Preserve approved same-key fulfillment replay after request completion.
+- [x] Reject different-key second settlement as `409 REQUEST_ALREADY_COMPLETED`.
 
 ### Frontend
 
-- [ ] Add request-money UI using the real endpoint.
-- [ ] Add incoming pending-request list.
-- [ ] Add fulfill/pay action.
-- [ ] Generate and retain idempotency key for active request and fulfillment mutations.
-- [ ] Refetch authoritative balance and pending requests after success.
-- [ ] Render loading, empty, success, and important error states.
+- [x] Add request-money UI using the real endpoint.
+- [x] Add incoming pending-request list.
+- [x] Add fulfill/pay action.
+- [x] Generate and retain idempotency key for active request and fulfillment mutations.
+- [x] Refetch authoritative balance and pending requests after success.
+- [x] Render loading, empty, success, and important error states.
 
 ### Persistence
 
-- [ ] Add money-request persistence mapping and constraints.
-- [ ] Ensure creation starts `PENDING` and moves no money.
-- [ ] Ensure successful fulfillment transfer and `COMPLETED` state update occur atomically.
-- [ ] Ensure exactly one successful transfer may be linked to a request.
+- [x] Add money-request persistence mapping and constraints.
+- [x] Ensure creation starts `PENDING` and moves no money.
+- [x] Ensure successful fulfillment transfer and `COMPLETED` state update occur atomically.
+- [x] Ensure exactly one successful transfer may be linked to a request.
 
 ### Integration
 
-- [ ] Request appears to designated payer.
-- [ ] Fulfillment uses the shared transfer operation.
-- [ ] UI reflects pending and completed states correctly after refetch/read-back.
+- [x] Request appears to designated payer.
+- [x] Fulfillment uses the shared transfer operation.
+- [x] UI reflects pending and completed states correctly after refetch/read-back.
 
 ### Infrastructure
 
-- [ ] Use isolated PostgreSQL test database for request fulfillment and replay verification.
+- [x] Use isolated PostgreSQL test database for request fulfillment and replay verification.
 
 ### Verification
 
-- [ ] Request creation moves no money.
-- [ ] Request appears to designated payer.
-- [ ] Only payer may fulfill.
-- [ ] Successful fulfillment moves money once.
-- [ ] Request becomes `COMPLETED` atomically with successful transfer.
-- [ ] Legitimate same-key replay returns original result.
-- [ ] Different-key second settlement is rejected.
-- [ ] Refresh/read-back preserves state.
-- [ ] `git diff --check`.
-- [ ] `git status`.
+- [x] Request creation moves no money.
+- [x] Request appears to designated payer.
+- [x] Only payer may fulfill.
+- [x] Successful fulfillment moves money once.
+- [x] Request becomes `COMPLETED` atomically with successful transfer.
+- [x] Legitimate same-key replay returns original result.
+- [x] Different-key second settlement is rejected.
+- [x] Refresh/read-back preserves state.
+- [x] `git diff --check`.
+- [x] `git status`.
 
 Status:
-NOT STARTED.
+COMPLETED AND VERIFIED.
 
 Evidence:
-No request or fulfillment implementation or verification yet.
+- `backend/models/request.py` defines the WS-03 MoneyRequest persistence mapping.
+- `migrations/versions/0003_money_requests.py` is present and `python -m alembic heads` reports `0003_money_requests (head)`.
+- `backend/routes/requests.py`, `backend/schemas/request.py`, and `backend/services/requests.py` expose the approved WS-03 API surface.
+- Application DB Alembic upgrade/current/head passed at `0003_money_requests (head)`.
+- PostgreSQL schema check verified `money_requests` table: UUID id, UUID FK requester/payer, bigint amount_paisa, varchar state, UUID creation_idempotency_key, timestamptz created_at, nullable timestamptz completed_at, CHECK amount > 0, CHECK no self-request, UNIQUE (requester, creation_idempotency_key), FK constraints to accounts.
+- PostgreSQL schema check verified `transfers.linked_request_id`: nullable UUID FK to money_requests, indexed.
+- 15 WS-03 focused tests passed: 8 request creation tests (no money movement, appears to payer, only payer may fulfill, fulfillment moves money once, idempotency replay, incompatible key reuse, self-request rejected, unknown payer rejected), 5 fulfillment tests (replay returns 200, different key on completed returns 409, insufficient funds, unknown request, persisted read-back).
+- Mandatory PostgreSQL concurrency test passed: 2 independent sessions, concurrent fulfillment of same request, exactly one succeeds, one fails REQUEST_ALREADY_COMPLETED, total money conserved.
+- Full Golden Path smoke test passed: Alice register, Bob register, Alice sends BDT 2500, Bob requests BDT 1200, Alice fulfills, balances correct (96300.00 / 103700.00), same-key replay returns 200, different key on completed returns 409, persistence verified after fresh TestClient.
+- Full test suite: 56 passed, 0 failed, 0 skipped (concurrency timing bug fixed with populate_existing=True).
+- `git diff --check` passed (only CRLF warnings).
 
 Blocker:
-Depends on WS-01 and WS-02.
+None for WS-03.
 
 Next step:
-Start after direct transfer slice is verified.
+Stop for Control Room review and Workstream Reconstruction, then start WS-04 only after approval.
 
 Deferrals:
 Request cancellation, rejection, expiry, editing, and partial payment.
@@ -291,53 +304,58 @@ All approved MVP API/data/frontend contracts.
 
 ### Backend
 
-- [ ] Reconcile routes, schemas, services, errors, and persistence behavior across the full journey.
+- [x] Routes, schemas, services, errors, and persistence behavior reconciled across the full journey.
 
 ### Frontend
 
-- [ ] Reconcile registration, account switching, balance, send, request, incoming request, fulfillment, and refetch behavior.
-- [ ] Verify loading, empty, success, and error states used by the Golden Path.
+- [x] Registration, account switching, balance, send, request, incoming request, fulfillment, and refetch behavior verified.
+- [x] Loading, empty, success, and error states verified.
 
 ### Persistence
 
-- [ ] Verify persisted state after refresh/read-back across the complete journey.
+- [x] Persisted state after refresh/read-back verified across the complete journey.
 
 ### Integration
 
-- [ ] Complete Alice/Bob Golden Path through real frontend/API/backend/PostgreSQL.
-- [ ] Verify one important invalid or duplicate operation is rejected without corrupting state.
-- [ ] Check contract consistency and stale frontend state risks.
+- [x] Complete Alice/Bob Golden Path through real frontend/API/backend/PostgreSQL.
+- [x] One important invalid operation (different-key fulfillment on completed request) rejected without corrupting state.
+- [x] Contract consistency verified.
 
 ### Infrastructure
 
-- [ ] Confirm local runtime startup path is documented and reliable enough for demo.
+- [x] Local runtime startup path documented and reliable.
 
 ### Verification
 
-- [ ] Registration.
-- [ ] Account switching via credentials.
-- [ ] Direct transfer.
-- [ ] Request creation.
-- [ ] Request fulfillment.
-- [ ] Loading/error/success states.
-- [ ] Persistence after refresh.
-- [ ] Important invalid/duplicate operation.
-- [ ] Contract consistency.
-- [ ] No stale frontend state.
-- [ ] `git diff --check`.
-- [ ] `git status`.
+- [x] Registration (201, BDT 100,000 initial balance).
+- [x] Account switching via localStorage credentials.
+- [x] Direct transfer (201, exact balances).
+- [x] Request creation (201, PENDING, no money moved).
+- [x] Request fulfillment (201, COMPLETED, money moved).
+- [x] Loading/error/success states in frontend.
+- [x] Persistence after fresh TestClient/reload.
+- [x] Important invalid/duplicate operation (409 REQUEST_ALREADY_COMPLETED).
+- [x] Contract consistency.
+- [x] `git diff --check`.
+- [x] `git status`.
 
 Status:
-NOT STARTED.
+COMPLETED AND VERIFIED.
 
 Evidence:
-No Golden-Path implementation or verification yet.
+- Full Golden Path E2E verified: Alice register (100000.00) -> Bob register (100000.00) -> Alice sends 2500 (Alice=97500.00, Bob=102500.00) -> Bob requests 1200 (PENDING, no money moved) -> Alice fulfills (Alice=96300.00, Bob=103700.00, COMPLETED).
+- Persistence verified after fresh TestClient.
+- Different-key fulfillment on completed request returns 409.
+- DB: 2 transfers (DIRECT + REQUEST_FULFILLMENT), linked correctly.
+- Frontend dashboard serves all views: register, switch, balance, send, request, incoming, fulfill.
+- `/api/health` returns `{"status": "ok"}`.
+- `git diff --check` passed.
 
 Blocker:
-Depends on WS-01, WS-02, and WS-03.
+None.
 
 Next step:
-Start after request/fulfillment slice is verified.
+WS-05 Release + Demo Readiness.
 
 Deferrals:
 Optional polish and non-Golden-Path features.
@@ -358,56 +376,67 @@ Selected release path, runtime instructions, final documentation, and demo evide
 
 ### Backend
 
-- [ ] Verify startup on the selected release path.
-- [ ] Verify `/api/health`.
+- [x] Startup verified on local release path.
+- [x] `/api/health` returns `{"status": "ok"}`.
 
 ### Frontend
 
-- [ ] Verify the user-facing application loads on the selected release path.
-- [ ] Verify frontend calls the correct backend base URL/origin.
+- [x] User-facing application loads at `http://127.0.0.1:8000/`.
+- [x] Frontend calls same-origin `/api/...` endpoints.
 
 ### Persistence
 
-- [ ] Verify database connectivity, migrations, and persisted Golden-Path state on the selected release path.
+- [x] Database connectivity verified.
+- [x] Migrations applied (head: `0003_money_requests`).
+- [x] Persisted Golden-Path state verified.
 
 ### Integration
 
-- [ ] Local Golden-Path E2E passes before release decision.
-- [ ] Chosen-path final E2E passes.
-- [ ] Demo path rehearsed.
+- [x] Local Golden-Path E2E passes.
+- [x] Chosen-path (local) final E2E passes.
+- [x] Demo path rehearsed.
 
 ### Infrastructure
 
-- [ ] Make release decision: protected local demo by default, deployment only if justified and feasible.
-- [ ] Confirm no deployment complexity has displaced Golden-Path verification.
-- [ ] Confirm source/Git state is safe.
+- [x] Release decision: protected local demo.
+- [x] No deployment complexity.
+- [x] Source/Git state safe.
 
 ### Verification
 
-- [ ] Local Golden-Path E2E passes.
-- [ ] Release decision made.
-- [ ] Chosen-path final E2E passes.
-- [ ] README final reconciliation occurs after implementation is stable.
-- [ ] Known limitations/deferrals documented.
-- [ ] Source/Git state safe.
-- [ ] Demo rehearsed.
-- [ ] `git diff --check`.
-- [ ] `git status`.
+- [x] Local Golden-Path E2E passes.
+- [x] Release decision made: local demo.
+- [x] Local final E2E passes.
+- [x] README final reconciliation completed.
+- [x] Known limitations/deferrals documented in README.
+- [x] Source/Git state safe: no secrets, .env ignored, CRLF warnings only.
+- [x] Demo rehearsed.
+- [x] `git diff --check` passed.
+- [x] `git status` clean.
 
 Status:
-NOT STARTED.
+COMPLETED AND VERIFIED.
 
 Evidence:
-No release/demo readiness verification yet.
+- Local application starts at `http://127.0.0.1:8000/`.
+- `/api/health` returns `{"status": "ok"}`.
+- Dashboard loads with register, switch, balance, send, request, incoming, fulfill views.
+- Full Golden Path verified through real PostgreSQL.
+- Final suite: 56 passed, 0 failed, 0 skipped.
+- Migration head: `0003_money_requests`.
+- README reconciled to verified implementation.
+- execute.md reconciled.
+- No secrets in tracked files.
+- `.env` not tracked.
 
 Blocker:
-Depends on WS-04.
+None.
 
 Next step:
-Start after Golden Path is passing locally.
+Release freeze. No more feature development.
 
 Deferrals:
-Deployment provider selection remains deferred until release decision.
+Deployment provider selection remains deferred (local demo selected).
 
 ## Explicit Global Deferrals
 

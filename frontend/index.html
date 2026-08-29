@@ -77,6 +77,26 @@
       <input type="text" id="send-amount" placeholder="e.g. 2500.00" autocomplete="off" />
       <button class="btn-primary" id="btn-send" disabled>Send Money</button>
     </div>
+
+    <!-- Request Money -->
+    <div id="request-section" class="card hidden">
+      <h2>Request Money</h2>
+      <div id="request-message" class="message hidden"></div>
+      <label for="payer-search">Search Payer</label>
+      <input type="text" id="payer-search" placeholder="Start typing a handle..." autocomplete="off" />
+      <div id="payer-search-results" class="search-results"></div>
+      <div id="selected-payer" class="hidden" style="margin-bottom:12px; font-size:0.9rem; color:#4361ee; font-weight:600;"></div>
+      <label for="request-amount">Amount (BDT)</label>
+      <input type="text" id="request-amount" placeholder="e.g. 1200.00" autocomplete="off" />
+      <button class="btn-primary" id="btn-request" disabled>Request Money</button>
+    </div>
+
+    <!-- Incoming Requests -->
+    <div id="incoming-section" class="card hidden">
+      <h2>Incoming Requests</h2>
+      <div id="request-list-message" class="message hidden"></div>
+      <div id="request-list" style="margin-bottom:12px;"></div>
+    </div>
   </div>
 
   <script>
@@ -84,7 +104,9 @@
     const accounts = JSON.parse(localStorage.getItem('money_accounts') || '[]');
     let currentHandle = localStorage.getItem('money_current_handle') || null;
     let selectedRecipientHandle = null;
+    let selectedPayerHandle = null;
     let searchTimeout = null;
+    let payerSearchTimeout = null;
 
     const $ = (id) => document.getElementById(id);
     const uuid = () => crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random()*16|0; return (c==='x'?r:(r&0x3|0x8)).toString(16); });
@@ -140,9 +162,11 @@
     // --- Dashboard ---
     async function showDashboard() {
       const acc = accounts.find(a => a.handle === currentHandle);
-      if (!acc) { $('dashboard-section').classList.add('hidden'); $('switcher-section').classList.add('hidden'); return; }
+      if (!acc) { $('dashboard-section').classList.add('hidden'); $('switcher-section').classList.add('hidden'); $('request-section').classList.add('hidden'); $('incoming-section').classList.add('hidden'); return; }
       renderSwitcher();
       $('dashboard-section').classList.remove('hidden');
+      $('request-section').classList.remove('hidden');
+      $('incoming-section').classList.remove('hidden');
       $('user-info').textContent = `${acc.display_name} (@${acc.handle})`;
       $('balance').textContent = '—';
       selectedRecipientHandle = null;
@@ -152,11 +176,21 @@
       $('send-amount').value = '';
       $('btn-send').disabled = true;
       hideMessage('send-message');
+      // Reset request section
+      selectedPayerHandle = null;
+      $('payer-search').value = '';
+      $('payer-search-results').innerHTML = '';
+      $('selected-payer').classList.add('hidden');
+      $('request-amount').value = '';
+      $('btn-request').disabled = true;
+      hideMessage('request-message');
       try {
         const res = await fetch(`${API}/auth/me`, { headers: { 'Authorization': `Bearer ${acc.token}` } });
         const data = await res.json();
         if (res.ok) { $('balance').textContent = data.balance; }
       } catch (e) { /* keep -- */ }
+      // Load incoming requests
+      loadIncomingRequests();
     }
 
     // --- User Search ---
@@ -239,9 +273,158 @@
       }
     });
 
+    // --- Payer Search (for request money) ---
+    $('payer-search').addEventListener('input', () => {
+      clearTimeout(payerSearchTimeout);
+      const query = $('payer-search').value.trim();
+      if (query.length < 1) { $('payer-search-results').innerHTML = ''; return; }
+      payerSearchTimeout = setTimeout(async () => {
+        const acc = accounts.find(a => a.handle === currentHandle);
+        if (!acc) return;
+        try {
+          const res = await fetch(`${API}/users?query=${encodeURIComponent(query)}`, {
+            headers: { 'Authorization': `Bearer ${acc.token}` }
+          });
+          const data = await res.json();
+          const results = $('payer-search-results');
+          results.innerHTML = '';
+          if (res.ok && data.users) {
+            data.users.forEach(user => {
+              const div = document.createElement('div');
+              div.className = 'search-item' + (user.handle === selectedPayerHandle ? ' selected' : '');
+              div.textContent = `${user.display_name} (@${user.handle})`;
+              div.addEventListener('click', () => {
+                selectedPayerHandle = user.handle;
+                $('selected-payer').textContent = `→ ${user.display_name} (@${user.handle})`;
+                $('selected-payer').classList.remove('hidden');
+                $('payer-search-results').innerHTML = '';
+                $('payer-search').value = '';
+                $('btn-request').disabled = !$('request-amount').value.trim();
+              });
+              results.appendChild(div);
+            });
+          }
+        } catch (e) { /* keep -- */ }
+      }, 300);
+    });
+
+    // --- Request Money ---
+    $('request-amount').addEventListener('input', () => {
+      $('btn-request').disabled = !selectedPayerHandle || !$('request-amount').value.trim();
+    });
+
+    $('btn-request').addEventListener('click', async () => {
+      hideMessage('request-message');
+      const acc = accounts.find(a => a.handle === currentHandle);
+      if (!acc) return;
+      const amount = $('request-amount').value.trim();
+      if (!selectedPayerHandle || !amount) { showMessage('request-message', 'Select a payer and enter an amount.', 'error'); return; }
+      $('btn-request').disabled = true;
+      $('btn-request').textContent = 'Requesting...';
+      try {
+        const res = await fetch(`${API}/requests`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${acc.token}`,
+            'Idempotency-Key': uuid()
+          },
+          body: JSON.stringify({ payer_handle: selectedPayerHandle, amount })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          const statusText = res.status === 201 ? 'Requested' : 'Replayed';
+          showMessage('request-message', `${statusText}: ${data.request.amount} BDT from @${data.request.payer.handle}`, 'success');
+          $('request-amount').value = '';
+          selectedPayerHandle = null;
+          $('selected-payer').classList.add('hidden');
+        } else {
+          showMessage('request-message', data.message || 'Request failed.', 'error');
+        }
+      } catch (e) {
+        showMessage('request-message', 'Network error.', 'error');
+      } finally {
+        $('btn-request').textContent = 'Request Money';
+        $('btn-request').disabled = false;
+      }
+    });
+
+    // --- Incoming Requests ---
+    async function loadIncomingRequests() {
+      const acc = accounts.find(a => a.handle === currentHandle);
+      if (!acc) return;
+      try {
+        const res = await fetch(`${API}/requests/incoming?status=pending`, {
+          headers: { 'Authorization': `Bearer ${acc.token}` }
+        });
+        const data = await res.json();
+        const list = $('request-list');
+        list.innerHTML = '';
+        if (res.ok && data.requests && data.requests.length > 0) {
+          $('incoming-section').classList.remove('hidden');
+          data.requests.forEach(req => {
+            const div = document.createElement('div');
+            div.style.cssText = 'padding:12px;border:1px solid #d0d0d0;border-radius:8px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;';
+            const info = document.createElement('div');
+            info.innerHTML = `<strong>@${req.requester.handle}</strong> requests <strong>${req.amount} BDT</strong><br><span style="font-size:0.8rem;color:#888;">${new Date(req.created_at).toLocaleString()}</span>`;
+            const btn = document.createElement('button');
+            btn.textContent = 'Fulfill';
+            btn.className = 'btn-primary';
+            btn.style.cssText = 'width:auto;padding:8px 16px;margin:0;';
+            btn.addEventListener('click', () => fulfillRequest(req.id, btn));
+            div.appendChild(info);
+            div.appendChild(btn);
+            list.appendChild(div);
+          });
+        } else {
+          if (res.ok) {
+            $('incoming-section').classList.remove('hidden');
+            list.innerHTML = '<div style="text-align:center;color:#888;padding:16px;">No pending requests</div>';
+          }
+        }
+      } catch (e) { /* keep -- */ }
+    }
+
+    async function fulfillRequest(requestId, btn) {
+      const acc = accounts.find(a => a.handle === currentHandle);
+      if (!acc) return;
+      btn.disabled = true;
+      btn.textContent = 'Fulfilling...';
+      hideMessage('request-list-message');
+      try {
+        const res = await fetch(`${API}/requests/${requestId}/fulfill`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${acc.token}`,
+            'Idempotency-Key': uuid()
+          }
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showMessage('request-list-message', `Fulfilled: ${data.transfer.amount} BDT sent to @${data.request.requester.handle}`, 'success');
+          // Refetch authoritative balance
+          const meRes = await fetch(`${API}/auth/me`, { headers: { 'Authorization': `Bearer ${acc.token}` } });
+          const meData = await meRes.json();
+          if (meRes.ok) { $('balance').textContent = meData.balance; }
+          // Reload incoming requests
+          loadIncomingRequests();
+        } else {
+          showMessage('request-list-message', data.message || 'Fulfillment failed.', 'error');
+          btn.disabled = false;
+          btn.textContent = 'Fulfill';
+        }
+      } catch (e) {
+        showMessage('request-list-message', 'Network error.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Fulfill';
+      }
+    }
+
     $('btn-register-another').addEventListener('click', () => {
       $('dashboard-section').classList.add('hidden');
       $('switcher-section').classList.add('hidden');
+      $('request-section').classList.add('hidden');
+      $('incoming-section').classList.add('hidden');
     });
 
     // --- Init ---
