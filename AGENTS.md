@@ -255,6 +255,9 @@ Reviewer Agents must:
 - docs/REPO_REVIEW_WORKFLOW.md — Reviewer Agent workflow
 - docs/phases/ — detailed implementation and learning documentation
 - docs/reviews/ — detailed independent repository-review evidence
+
+README.md is project-facing documentation. A challenge repository may begin with a generic starter README, but after `problem.md` and `plan.md` are approved, `README.md` should transition to challenge-specific documentation without claiming unimplemented features. After the Golden Path and implementation stabilize, reconcile `README.md` against actual verified repository behavior. `problem.md`, `plan.md`, `execute.md`, `review.md`, and actual code/evidence retain their existing authority and state-tracking roles.
+
 Avoid duplicating full phase documentation into review.md.
 20. Hackathon Priority Rule
 When time is constrained, prioritize in this order:
