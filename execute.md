@@ -11,8 +11,9 @@
 ## Current Status
 
 [x] WS-01 Authoritative Account Foundation completed and verified.
+[x] WS-02 Direct Transfer Vertical Slice completed and verified.
 
-`problem.md` contains the approved Money Movement Application problem definition. `plan.md` contains the approved Master System Design and capability-oriented workstream map. WS-01 account foundation code, migration, routes, services, and tests have been added and verified against the dedicated local PostgreSQL application and test databases. WS-02 through WS-05 remain not started.
+`problem.md` contains the approved Money Movement Application problem definition. `plan.md` contains the approved Master System Design and capability-oriented workstream map. WS-01 account foundation code, migration, routes, services, and tests have been added and verified. WS-02 direct transfer vertical slice including Transfer model, migration, service with atomic transaction/row locking/idempotency, API route, money parsing, comprehensive tests, concurrency test, frontend send flow, and Golden Path smoke test have been verified against PostgreSQL. WS-03 through WS-05 remain not started.
 
 ## Repository Reality At Initialization
 
@@ -28,7 +29,7 @@
 | Workstream | Capability | Status | Golden Path | Blocker | Next |
 | ---------- | ---------- | ------ | ----------- | ------- | ---- |
 | WS-01 | Authoritative Account Foundation | COMPLETED AND VERIFIED | Supports Alice/Bob setup | None | Control Room review and Workstream Reconstruction before WS-02 |
-| WS-02 | Direct Transfer Vertical Slice | NOT STARTED | Alice sends BDT 2,500 to Bob | Depends on WS-01 | Start after account foundation is verified |
+| WS-02 | Direct Transfer Vertical Slice | COMPLETED AND VERIFIED | Alice sends BDT 2,500 to Bob | None | Control Room review before WS-03 |
 | WS-03 | Money Request + Fulfillment Vertical Slice | NOT STARTED | Bob requests BDT 1,200 from Alice; Alice fulfills | Depends on WS-01 and WS-02 shared transfer operation | Start after direct transfer slice is verified |
 | WS-04 | Golden-Path Integration + Hardening | NOT STARTED | Full approved Alice/Bob journey | Depends on WS-01, WS-02, and WS-03 | Start after request/fulfillment slice is verified |
 | WS-05 | Release + Demo Readiness | NOT STARTED | Final demo readiness | Depends on WS-04 | Start after Golden Path is passing locally |
@@ -129,59 +130,70 @@ Transfer entity, `POST /api/transfers`, money representation, and idempotency-ke
 
 ### Backend
 
-- [ ] Add direct transfer route/schema/service.
-- [ ] Enforce authenticated sender authority from bearer token.
-- [ ] Validate recipient, amount, self-transfer, sufficient funds, and idempotency behavior.
-- [ ] Translate domain errors to stable API errors.
+- [x] Add direct transfer route/schema/service.
+- [x] Enforce authenticated sender authority from bearer token.
+- [x] Validate recipient, amount, self-transfer, sufficient funds, and idempotency behavior.
+- [x] Translate domain errors to stable API errors.
 
 ### Frontend
 
-- [ ] Add send-money UI using the real endpoint.
-- [ ] Generate and retain idempotency key for active mutation/retry.
-- [ ] Refetch authoritative balance after success.
-- [ ] Render loading, success, and important error states.
+- [x] Add send-money UI using the real endpoint.
+- [x] Generate and retain idempotency key for active mutation/retry.
+- [x] Refetch authoritative balance after success.
+- [x] Render loading, success, and important error states.
 
 ### Persistence
 
-- [ ] Add transfer persistence mapping and constraints.
-- [ ] Persist immutable successful transfers.
-- [ ] Use PostgreSQL row-level `FOR UPDATE` locking through SQLAlchemy.
-- [ ] Lock multiple account rows in canonical ascending account-ID order.
+- [x] Add transfer persistence mapping and constraints.
+- [x] Persist immutable successful transfers.
+- [x] Use PostgreSQL row-level `FOR UPDATE` locking through SQLAlchemy.
+- [x] Lock multiple account rows in canonical ascending account-ID order.
 
 ### Integration
 
-- [ ] Real send form calls real API.
-- [ ] Backend persists one atomic debit/credit/transfer.
-- [ ] Frontend displays refreshed authoritative balances.
+- [x] Real send form calls real API.
+- [x] Backend persists one atomic debit/credit/transfer.
+- [x] Frontend displays refreshed authoritative balances.
 
 ### Infrastructure
 
-- [ ] Use isolated PostgreSQL test database for concurrency verification.
+- [x] Use isolated PostgreSQL test database for concurrency verification.
 
 ### Verification
 
-- [ ] Exact money math.
-- [ ] Atomic debit/credit.
-- [ ] Insufficient funds changes nothing.
-- [ ] Same idempotency key does not double-transfer.
-- [ ] Incompatible key reuse rejected.
-- [ ] Concurrent BDT 800 + BDT 800 attempts against BDT 1,000 allow at most one success.
-- [ ] Real send form calls real endpoint.
-- [ ] Balance refetch/display is correct.
-- [ ] `git diff --check`.
-- [ ] `git status`.
+- [x] Exact money math.
+- [x] Atomic debit/credit.
+- [x] Insufficient funds changes nothing.
+- [x] Same idempotency key does not double-transfer.
+- [x] Incompatible key reuse rejected.
+- [x] Concurrent BDT 800 + BDT 800 attempts against BDT 1,000 allow at most one success.
+- [x] Real send form calls real endpoint.
+- [x] Balance refetch/display is correct.
+- [x] `git diff --check`.
+- [x] `git status`.
 
 Status:
-NOT STARTED.
+COMPLETED AND VERIFIED.
 
 Evidence:
-No direct-transfer implementation or verification yet.
+- `backend/models/transfer.py` defines the WS-02 Transfer persistence mapping.
+- `migrations/versions/0002_transfers.py` is present and `python -m alembic heads` reports `0002_transfers (head)`.
+- `backend/routes/transfers.py`, `backend/schemas/transfer.py`, and `backend/services/transfers.py` expose the approved WS-02 API surface.
+- `backend/logic/money.py` extended with `parse_paisa()` for exact integer paisa conversion without float.
+- Application DB Alembic upgrade/current/head passed at `0002_transfers (head)`.
+- PostgreSQL schema check verified `transfers` table: UUID id, UUID FK sender/recipient, bigint amount_paisa, UUID idempotency_key, kind varchar, timestamptz created_at, CHECK amount > 0, CHECK no self-transfer, UNIQUE (sender, idempotency_key), FK constraints to accounts.
+- 23 WS-02 focused tests passed: 8 money parsing tests, 13 API behavior tests (exact balances, bearer authority, unknown recipient, self-transfer, insufficient funds, money conservation, idempotency replay, incompatible key reuse, missing/invalid idempotency key, unauthenticated, persisted read-back).
+- Mandatory PostgreSQL concurrency test passed: 2 independent sessions, concurrent BDT 800 + BDT 800 against BDT 1,000, exactly one succeeds, one fails INSUFFICIENT_FUNDS, Alice ends BDT 200, one transfer persisted, total money conserved.
+- Full test suite passed: 41 passed, 0 skipped.
+- Golden Path smoke test passed: Alice register → 100000.00, Bob register → 100000.00, Alice sends BDT 2500 to Bob → 201, Alice balance 97500.00, Bob balance 102500.00, same-key replay → 200 no duplicate, persistence verified after fresh TestClient, DB verification: 1 transfer, total conserved.
+- `git diff --check` passed.
+- `.env` not tracked, no credentials leaked, no MoneyRequest implementation found.
 
 Blocker:
-Depends on WS-01.
+None for WS-02.
 
 Next step:
-Start after account foundation is verified.
+Stop for Control Room review and Workstream Reconstruction, then start WS-03 only after approval.
 
 Deferrals:
 Transaction-history UI unless later needed; distributed locks; queues; serializable isolation unless separately replanned.

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Money Movement</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
+    .container { max-width: 480px; margin: 0 auto; padding: 24px 16px; }
+    h1 { font-size: 1.5rem; margin-bottom: 16px; text-align: center; }
+    .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .card h2 { font-size: 1.1rem; margin-bottom: 12px; color: #16213e; }
+    label { display: block; font-size: 0.85rem; margin-bottom: 4px; color: #555; }
+    input, select, button { width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 8px; font-size: 0.95rem; margin-bottom: 12px; }
+    input:focus, select:focus { outline: none; border-color: #4361ee; box-shadow: 0 0 0 2px rgba(67,97,238,0.2); }
+    button { cursor: pointer; font-weight: 600; }
+    .btn-primary { background: #4361ee; color: #fff; border: none; }
+    .btn-primary:hover { background: #3a56d4; }
+    .btn-primary:disabled { background: #a0b0e0; cursor: not-allowed; }
+    .btn-secondary { background: #e9ecef; color: #333; border: 1px solid #d0d0d0; }
+    .btn-secondary:hover { background: #dde0e4; }
+    .balance-display { font-size: 1.8rem; font-weight: 700; color: #16213e; text-align: center; margin: 8px 0; }
+    .balance-label { font-size: 0.8rem; color: #888; text-align: center; }
+    .user-info { font-size: 0.9rem; color: #555; text-align: center; margin-bottom: 4px; }
+    .message { padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 0.9rem; }
+    .message.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .message.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .hidden { display: none; }
+    .account-switcher { display: flex; gap: 8px; margin-bottom: 12px; }
+    .account-switcher button { flex: 1; }
+    .account-switcher button.active { background: #4361ee; color: #fff; border-color: #4361ee; }
+    .divider { border: none; border-top: 1px solid #eee; margin: 16px 0; }
+    .search-results { max-height: 150px; overflow-y: auto; border: 1px solid #d0d0d0; border-radius: 8px; margin-bottom: 12px; }
+    .search-results:empty { display: none; }
+    .search-item { padding: 8px 12px; cursor: pointer; font-size: 0.9rem; }
+    .search-item:hover { background: #f0f2f5; }
+    .search-item.selected { background: #e8edff; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>💰 Money Movement</h1>
+
+    <!-- Register Form -->
+    <div id="register-section" class="card">
+      <h2>Register</h2>
+      <div id="register-message" class="message hidden"></div>
+      <label for="reg-handle">Handle</label>
+      <input type="text" id="reg-handle" placeholder="e.g. alice" autocomplete="off" />
+      <label for="reg-name">Display Name</label>
+      <input type="text" id="reg-name" placeholder="e.g. Alice" autocomplete="off" />
+      <button class="btn-primary" id="btn-register">Register</button>
+    </div>
+
+    <!-- Account Switcher -->
+    <div id="switcher-section" class="card hidden">
+      <h2>Switch Account</h2>
+      <div id="account-switcher" class="account-switcher"></div>
+      <button class="btn-secondary" id="btn-register-another">Register Another</button>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard-section" class="card hidden">
+      <h2>Dashboard</h2>
+      <div id="user-info" class="user-info"></div>
+      <div class="balance-label">Current Balance (BDT)</div>
+      <div id="balance" class="balance-display">—</div>
+      <hr class="divider" />
+      <h2>Send Money</h2>
+      <div id="send-message" class="message hidden"></div>
+      <label for="recipient-search">Search Recipient</label>
+      <input type="text" id="recipient-search" placeholder="Start typing a handle..." autocomplete="off" />
+      <div id="search-results" class="search-results"></div>
+      <div id="selected-recipient" class="hidden" style="margin-bottom:12px; font-size:0.9rem; color:#4361ee; font-weight:600;"></div>
+      <label for="send-amount">Amount (BDT)</label>
+      <input type="text" id="send-amount" placeholder="e.g. 2500.00" autocomplete="off" />
+      <button class="btn-primary" id="btn-send" disabled>Send Money</button>
+    </div>
+  </div>
+
+  <script>
+    const API = '/api';
+    const accounts = JSON.parse(localStorage.getItem('money_accounts') || '[]');
+    let currentHandle = localStorage.getItem('money_current_handle') || null;
+    let selectedRecipientHandle = null;
+    let searchTimeout = null;
+
+    const $ = (id) => document.getElementById(id);
+    const uuid = () => crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random()*16|0; return (c==='x'?r:(r&0x3|0x8)).toString(16); });
+
+    function saveAccounts() { localStorage.setItem('money_accounts', JSON.stringify(accounts)); }
+    function saveCurrentHandle() { localStorage.setItem('money_current_handle', currentHandle || ''); }
+
+    function showMessage(id, text, type) {
+      const el = $(id);
+      el.textContent = text;
+      el.className = 'message ' + type;
+      el.classList.remove('hidden');
+    }
+    function hideMessage(id) { $(id).classList.add('hidden'); }
+
+    // --- Register ---
+    $('btn-register').addEventListener('click', async () => {
+      hideMessage('register-message');
+      const handle = $('reg-handle').value.trim();
+      const displayName = $('reg-name').value.trim();
+      if (!handle || !displayName) { showMessage('register-message', 'Handle and display name are required.', 'error'); return; }
+      try {
+        const res = await fetch(`${API}/auth/register`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ handle, display_name: displayName })
+        });
+        const data = await res.json();
+        if (!res.ok) { showMessage('register-message', data.message || 'Registration failed.', 'error'); return; }
+        accounts.push({ handle: data.user.handle, display_name: data.user.display_name, token: data.access_token });
+        saveAccounts();
+        currentHandle = data.user.handle;
+        saveCurrentHandle();
+        $('reg-handle').value = '';
+        $('reg-name').value = '';
+        showDashboard();
+      } catch (e) { showMessage('register-message', 'Network error.', 'error'); }
+    });
+
+    // --- Switch Account ---
+    function renderSwitcher() {
+      const container = $('account-switcher');
+      container.innerHTML = '';
+      accounts.forEach(acc => {
+        const btn = document.createElement('button');
+        btn.textContent = acc.display_name;
+        btn.className = acc.handle === currentHandle ? 'btn-secondary active' : 'btn-secondary';
+        btn.addEventListener('click', () => { currentHandle = acc.handle; saveCurrentHandle(); showDashboard(); });
+        container.appendChild(btn);
+      });
+      $('switcher-section').classList.remove('hidden');
+    }
+
+    // --- Dashboard ---
+    async function showDashboard() {
+      const acc = accounts.find(a => a.handle === currentHandle);
+      if (!acc) { $('dashboard-section').classList.add('hidden'); $('switcher-section').classList.add('hidden'); return; }
+      renderSwitcher();
+      $('dashboard-section').classList.remove('hidden');
+      $('user-info').textContent = `${acc.display_name} (@${acc.handle})`;
+      $('balance').textContent = '—';
+      selectedRecipientHandle = null;
+      $('recipient-search').value = '';
+      $('search-results').innerHTML = '';
+      $('selected-recipient').classList.add('hidden');
+      $('send-amount').value = '';
+      $('btn-send').disabled = true;
+      hideMessage('send-message');
+      try {
+        const res = await fetch(`${API}/auth/me`, { headers: { 'Authorization': `Bearer ${acc.token}` } });
+        const data = await res.json();
+        if (res.ok) { $('balance').textContent = data.balance; }
+      } catch (e) { /* keep -- */ }
+    }
+
+    // --- User Search ---
+    $('recipient-search').addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      const query = $('recipient-search').value.trim();
+      if (query.length < 1) { $('search-results').innerHTML = ''; return; }
+      searchTimeout = setTimeout(async () => {
+        const acc = accounts.find(a => a.handle === currentHandle);
+        if (!acc) return;
+        try {
+          const res = await fetch(`${API}/users?query=${encodeURIComponent(query)}`, {
+            headers: { 'Authorization': `Bearer ${acc.token}` }
+          });
+          const data = await res.json();
+          const results = $('search-results');
+          results.innerHTML = '';
+          if (res.ok && data.users) {
+            data.users.forEach(user => {
+              const div = document.createElement('div');
+              div.className = 'search-item' + (user.handle === selectedRecipientHandle ? ' selected' : '');
+              div.textContent = `${user.display_name} (@${user.handle})`;
+              div.addEventListener('click', () => {
+                selectedRecipientHandle = user.handle;
+                $('selected-recipient').textContent = `→ ${user.display_name} (@${user.handle})`;
+                $('selected-recipient').classList.remove('hidden');
+                $('search-results').innerHTML = '';
+                $('recipient-search').value = '';
+                $('btn-send').disabled = !$('send-amount').value.trim();
+              });
+              results.appendChild(div);
+            });
+          }
+        } catch (e) { /* keep -- */ }
+      }, 300);
+    });
+
+    // --- Send Money ---
+    $('send-amount').addEventListener('input', () => {
+      $('btn-send').disabled = !selectedRecipientHandle || !$('send-amount').value.trim();
+    });
+
+    $('btn-send').addEventListener('click', async () => {
+      hideMessage('send-message');
+      const acc = accounts.find(a => a.handle === currentHandle);
+      if (!acc) return;
+      const amount = $('send-amount').value.trim();
+      if (!selectedRecipientHandle || !amount) { showMessage('send-message', 'Select a recipient and enter an amount.', 'error'); return; }
+      $('btn-send').disabled = true;
+      $('btn-send').textContent = 'Sending...';
+      try {
+        const res = await fetch(`${API}/transfers`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${acc.token}`,
+            'Idempotency-Key': uuid()
+          },
+          body: JSON.stringify({ recipient_handle: selectedRecipientHandle, amount })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          const statusText = res.status === 201 ? 'Sent' : 'Replayed';
+          showMessage('send-message', `${statusText}: ${data.transfer.amount} BDT to @${data.transfer.recipient.handle}`, 'success');
+          // Refetch authoritative balance
+          const meRes = await fetch(`${API}/auth/me`, { headers: { 'Authorization': `Bearer ${acc.token}` } });
+          const meData = await meRes.json();
+          if (meRes.ok) { $('balance').textContent = meData.balance; }
+          $('send-amount').value = '';
+          selectedRecipientHandle = null;
+          $('selected-recipient').classList.add('hidden');
+        } else {
+          showMessage('send-message', data.message || 'Transfer failed.', 'error');
+        }
+      } catch (e) {
+        showMessage('send-message', 'Network error.', 'error');
+      } finally {
+        $('btn-send').textContent = 'Send Money';
+        $('btn-send').disabled = false;
+      }
+    });
+
+    $('btn-register-another').addEventListener('click', () => {
+      $('dashboard-section').classList.add('hidden');
+      $('switcher-section').classList.add('hidden');
+    });
+
+    // --- Init ---
+    if (currentHandle && accounts.find(a => a.handle === currentHandle)) {
+      showDashboard();
+    } else if (accounts.length > 0) {
+      currentHandle = accounts[0].handle;
+      saveCurrentHandle();
+      showDashboard();
+    }
+  </script>
+</body>
+</html>
