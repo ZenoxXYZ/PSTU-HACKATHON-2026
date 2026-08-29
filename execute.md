@@ -10,9 +10,9 @@
 
 ## Current Status
 
-[ ] Product implementation NOT STARTED.
+[x] WS-01 Authoritative Account Foundation completed and verified.
 
-`problem.md` contains the approved Money Movement Application problem definition. `plan.md` contains the approved Master System Design and capability-oriented workstream map. No product entities, tables, migrations, APIs, business rules, frontend behavior, or product tests have been implemented yet.
+`problem.md` contains the approved Money Movement Application problem definition. `plan.md` contains the approved Master System Design and capability-oriented workstream map. WS-01 account foundation code, migration, routes, services, and tests have been added and verified against the dedicated local PostgreSQL application and test databases. WS-02 through WS-05 remain not started.
 
 ## Repository Reality At Initialization
 
@@ -20,14 +20,14 @@
 - [x] Generic starter tests exist.
 - [x] Approved `problem.md` exists.
 - [x] Approved `plan.md` exists.
-- [ ] Product-specific implementation pending.
-- [ ] Product-specific verification pending.
+- [x] Product-specific implementation started with WS-01.
+- [x] Product-specific WS-01 verification completed against PostgreSQL.
 
 ## Workstream Status Summary
 
 | Workstream | Capability | Status | Golden Path | Blocker | Next |
 | ---------- | ---------- | ------ | ----------- | ------- | ---- |
-| WS-01 | Authoritative Account Foundation | NOT STARTED | Supports Alice/Bob setup | Safe app/test PostgreSQL configuration must be confirmed before persistence work mutates data | Begin WS-01 planning, then implement only after approval |
+| WS-01 | Authoritative Account Foundation | COMPLETED AND VERIFIED | Supports Alice/Bob setup | None | Control Room review and Workstream Reconstruction before WS-02 |
 | WS-02 | Direct Transfer Vertical Slice | NOT STARTED | Alice sends BDT 2,500 to Bob | Depends on WS-01 | Start after account foundation is verified |
 | WS-03 | Money Request + Fulfillment Vertical Slice | NOT STARTED | Bob requests BDT 1,200 from Alice; Alice fulfills | Depends on WS-01 and WS-02 shared transfer operation | Start after direct transfer slice is verified |
 | WS-04 | Golden-Path Integration + Hardening | NOT STARTED | Full approved Alice/Bob journey | Depends on WS-01, WS-02, and WS-03 | Start after request/fulfillment slice is verified |
@@ -49,10 +49,10 @@ Account entity, registration, current-user, and user-search contracts.
 
 ### Backend
 
-- [ ] Add account registration use case.
-- [ ] Add bearer-token generation, storage hash/secure representation, and authentication dependency.
-- [ ] Add current-user resolution.
-- [ ] Add user discovery/search behavior.
+- [x] Add account registration use case.
+- [x] Add bearer-token generation, storage hash/secure representation, and authentication dependency.
+- [x] Add current-user resolution.
+- [x] Add user discovery/search behavior.
 
 ### Frontend
 
@@ -60,43 +60,55 @@ Account entity, registration, current-user, and user-search contracts.
 
 ### Persistence
 
-- [ ] Add account persistence mapping and constraints.
-- [ ] Add explicit Alembic migration.
-- [ ] Ensure registration provisions BDT 100,000 exactly once.
+- [x] Add account persistence mapping and constraints.
+- [x] Add explicit Alembic migration.
+- [x] Ensure registration provisions BDT 100,000 exactly once.
 
 ### Integration
 
-- [ ] Registration endpoint returns token, user summary, and balance.
-- [ ] Current-user endpoint returns authenticated user and authoritative balance.
-- [ ] User search endpoint returns selectable public user summaries.
+- [x] Registration endpoint returns token, user summary, and balance.
+- [x] Current-user endpoint returns authenticated user and authoritative balance.
+- [x] User search endpoint returns selectable public user summaries.
 
 ### Infrastructure
 
-- [ ] Confirm safe app/test PostgreSQL URLs before running migrations or database tests.
+- [x] Confirm safe app/test PostgreSQL URLs before running migrations or database tests.
 
 ### Verification
 
-- [ ] Safe app/test DB configuration verified.
-- [ ] Migration applies.
-- [ ] Registration provisions BDT 100,000 exactly once.
-- [ ] Duplicate handles rejected.
-- [ ] Bearer token resolves current actor.
-- [ ] Current balance returned correctly.
-- [ ] User lookup works.
-- [ ] `git diff --check`.
-- [ ] `git status`.
+- [x] Safe app/test DB configuration verified.
+- [x] Migration applies.
+- [x] Registration provisions BDT 100,000 exactly once.
+- [x] Duplicate handles rejected.
+- [x] Bearer token resolves current actor.
+- [x] Current balance returned correctly.
+- [x] User lookup works.
+- [x] `git diff --check`.
+- [x] `git status`.
 
 Status:
-NOT STARTED.
+COMPLETED AND VERIFIED.
 
 Evidence:
-No product implementation or verification yet.
+- `backend/models/account.py` defines the WS-01 Account persistence mapping.
+- `migrations/versions/0001_accounts.py` is present and `python -m alembic heads` reports `0001_accounts (head)`.
+- `backend/routes/auth.py` and `backend/routes/users.py` expose the approved WS-01 API surface.
+- Environment safety check verified ignored `.env` loading without exposing credentials: application DB `pstu_money`, test DB `pstu_money_test`, PostgreSQL psycopg URLs, different targets, and `_test` guard.
+- Connectivity to both `pstu_money` and `pstu_money_test` passed.
+- Test DB Alembic upgrade/current/head passed at `0001_accounts (head)`.
+- PostgreSQL schema check verified `accounts` table, UUID id, bigint balance, token hash, required columns, unique handle/token indexes, and non-negative balance constraint.
+- Focused PostgreSQL-backed WS-01 tests passed: 14 passed, 0 skipped.
+- Full test suite passed: 18 passed, 0 skipped.
+- Application DB Alembic upgrade/current/head passed at `0001_accounts (head)`.
+- PostgreSQL-backed API smoke passed: Alice and Bob registration returned `201` with `"100000.00"`, Alice `/api/auth/me` returned persisted identity/balance, authenticated user search found Bob and exposed only public fields, duplicate normalized registration returned `409 HANDLE_ALREADY_EXISTS`, and no extra account/starting balance was created.
+- Reopened PostgreSQL session read back Alice account state with `10_000_000` paisa balance.
+- `git diff --check` passed.
 
 Blocker:
-Safe app/test PostgreSQL configuration must be confirmed before persistence work mutates data.
+None for WS-01.
 
 Next step:
-Begin WS-01 planning and approval.
+Stop for Control Room review and Workstream Reconstruction, then start WS-02 only after approval.
 
 Deferrals:
 Passwords, recovery, token revocation, production authentication hardening, and multi-device account security.
