@@ -1,190 +1,261 @@
 # Money Movement Application
 
-PSTU National Hackathon 2026
+A concurrency-safe, idempotent simulated BDT transfer and request system built with FastAPI and PostgreSQL.
 
-A simulated-money Money Movement Application MVP where registered users can send and request simulated BDT while the backend preserves financial correctness under invalid input, retries, duplicate actions, and concurrent activity.
+## Overview
 
-The MVP uses fake money only. It does not integrate with real banks, cards, payment gateways, deposits, withdrawals, KYC, or real financial systems.
+Money Movement Application is a closed-ecosystem MVP for moving fake BDT between demo users. Users can register accounts, receive an initial simulated balance, send money, request money, view incoming requests, fulfill requests, and refresh persisted financial state.
 
-## Implemented Golden Path
+The technical focus is backend correctness: exact money arithmetic, server-derived authority, atomic state changes, retry safety, and PostgreSQL row-level concurrency control. The frontend is intentionally lightweight: one same-origin HTML/CSS/vanilla JavaScript dashboard served by FastAPI.
 
-The complete Golden Path is verified and passes:
+This is not a production banking system. It does not connect to real banks, cards, payment gateways, deposits, withdrawals, KYC, or real-money infrastructure.
+
+## Key Features
+
+- Demo account registration with opaque bearer-token identity
+- Initial simulated balance of BDT `100000.00` per new account
+- Direct money transfers between valid application users
+- Request Money workflow with incoming pending request view
+- Request fulfillment by the designated payer
+- Persistent PostgreSQL account, transfer, and request state
+- Retry-safe idempotency for direct sends, request creation, and fulfillment
+- PostgreSQL row locks for concurrent spending protection
+- Exact integer-paisa financial arithmetic with no float math
+
+## Golden Path
 
 ```text
-Alice registers (BDT 100,000)
--> Bob registers (BDT 100,000)
--> Alice sends BDT 2,500 to Bob
--> balances: Alice=97,500.00, Bob=102,500.00
--> Bob requests BDT 1,200 from Alice
--> request=PENDING, no money moved
--> Alice fulfills the request
--> balances: Alice=96,300.00, Bob=103,700.00
--> request=COMPLETED, money moved exactly once
--> persistence verified after refresh/reload
--> one invalid operation rejected without corruption
+Alice starts: 100000.00
+Bob starts:   100000.00
+
+Alice sends Bob 2500.00
+Alice:  97500.00
+Bob:   102500.00
+
+Bob requests 1200.00 from Alice
+Request: PENDING
+Balances unchanged
+
+Alice fulfills the request
+Alice:  96300.00
+Bob:   103700.00
+Request: COMPLETED
+
+Total conserved after account creation: 200000.00
 ```
 
 ## Architecture
 
 ```text
-responsive same-origin HTML/CSS/JavaScript frontend
--> FastAPI (modular monolith)
--> Pydantic
--> services/business logic
--> SQLAlchemy
--> PostgreSQL
+Browser
+  |
+  v
+FastAPI routes
+  |
+  +--> Pydantic schemas
+  +--> Bearer-token authentication
+  |
+  v
+Service layer
+  |
+  v
+SQLAlchemy
+  |
+  v
+PostgreSQL
 ```
 
-FastAPI serves both the static user-facing dashboard at `/` and `/api/...` endpoints.
+The project uses a modular monolith because the MVP is bounded, local-demo friendly, quick to explain, and does not need distributed infrastructure. FastAPI serves the dashboard at `/` and the JSON API under `/api/...`. Alembic owns schema migrations, and pytest verifies the backend and database behavior.
 
-## Money Representation
+## Backend Correctness Model
 
-- **Internal:** integer paisa (bigint) for exact authoritative arithmetic
-- **HTTP boundary:** fixed decimal BDT strings (e.g. `"2500.00"`)
-- **Float is never used** for money calculations
+### Exact Money
 
-## Authentication
+HTTP uses decimal BDT strings such as `"2500.00"`. Internally, money is parsed into integer paisa, so `"2500.00"` becomes `250000`. PostgreSQL stores balances and amounts as integer `BIGINT` values. Authoritative money calculations never use floating-point arithmetic.
 
-Lightweight opaque bearer-token identity for the simulated-money MVP.
+### Atomic Transfers
 
-- Registration generates a raw bearer token returned to the browser
-- Only a SHA-256 hash of the token is stored in the database
-- The raw token is never persisted or logged
-- All authenticated requests use `Authorization: Bearer <token>`
+A direct transfer debits the sender, credits the recipient, and inserts the transfer record in one transaction. Request fulfillment debits the payer, credits the requester, inserts a `REQUEST_FULFILLMENT` transfer, and marks the request `COMPLETED` in one transaction.
 
-## Direct Transfer
+### Concurrency Control
 
-- Exact atomic debit/credit/transfer in one PostgreSQL transaction
-- Sender authority from bearer token, not frontend-supplied IDs
-- Insufficient funds rejected without changing state
-- `Idempotency-Key` header for retry and duplicate safety
-- Same key + same payload = legitimate replay (200), no double movement
-- Same key + different payload = 409 conflict
+Transfers use PostgreSQL `SELECT ... FOR UPDATE` through SQLAlchemy. Both affected account rows are locked in canonical UUID order, then the balance is checked after the locks are held. `populate_existing=True` refreshes SQLAlchemy identity-mapped rows after lock waits so stale in-memory balances are not reused.
 
-## MoneyRequest Lifecycle
+Verified concurrency scenario:
+
+```text
+Alice has BDT 1000.00
+Two concurrent outgoing transfers attempt BDT 800.00 each
+Exactly one succeeds
+The other receives insufficient funds
+Alice ends at BDT 200.00
+```
+
+### Idempotency
+
+State-changing POST requests use a client-generated UUID in the `Idempotency-Key` header. A retry with the same logical operation returns the original result instead of moving money again. Reusing the same key for an incompatible operation is rejected with `409 IDEMPOTENCY_KEY_REUSED`.
+
+The frontend preserves the same key across ambiguous retries for direct send, request creation, and request fulfillment. A new logical operation receives a new key.
+
+### Authentication And Authority
+
+Registration issues an opaque bearer token to the browser. The database stores a SHA-256 token hash, not the raw token. The authenticated bearer identity determines the sender, requester, or payer; the frontend does not choose the authoritative spending account.
+
+For demo account switching, the browser stores account credentials in `localStorage`. This is hackathon/demo authentication, not production auth.
+
+## Money Request Lifecycle
 
 ```text
 PENDING -> COMPLETED
 ```
 
-- Request creation moves no money (PENDING state)
-- Only the designated payer may fulfill
-- Fulfillment debits payer, credits requester, inserts transfer atomically
-- Same-key replay after completion returns original result (200)
-- Different-key attempt after completion returns 409 REQUEST_ALREADY_COMPLETED
+Creating a request moves no money. The authenticated requester chooses a payer, and only that designated payer can fulfill the pending request. Fulfillment uses the same money movement model as direct transfer and serializes competing attempts with a `MoneyRequest` row lock.
 
-## Shared Transfer Engine
+Duplicate fulfillment is currently prevented by request row locking, the `PENDING -> COMPLETED` service transition, and fulfillment idempotency/service logic. The schema has a foreign key and index on `transfers.linked_request_id`; a database-level unique linked-request constraint remains a possible defense-in-depth improvement.
 
-Both direct transfers and request fulfillment use the same underlying money movement service:
+## Technology Stack
 
-- `backend/services/transfers.py` — direct transfer orchestration
-- `backend/services/requests.py` — request fulfillment orchestration
+| Area | Technology |
+| --- | --- |
+| Backend | FastAPI |
+| Database | PostgreSQL |
+| ORM | SQLAlchemy |
+| Migrations | Alembic |
+| Validation | Pydantic |
+| Frontend | HTML, CSS, vanilla JavaScript |
+| Testing | pytest |
+| Server | Uvicorn |
 
-Both enforce identical invariants: canonical lock ordering, sufficient funds check post-lock, atomic debit/credit/transfer record.
+## Repository Structure
 
-## PostgreSQL Concurrency
+```text
+backend/
+  models/      SQLAlchemy persistence mappings
+  schemas/     Pydantic request/response contracts
+  services/    Application operations and transactions
+  routes/      FastAPI HTTP endpoints
+  logic/       Pure money parsing and validation helpers
+frontend/      Same-origin browser dashboard
+migrations/    Alembic schema migrations
+tests/         PostgreSQL-backed automated verification
 
-- Row-level `SELECT ... FOR UPDATE` locks for concurrent spending protection
-- Canonical ascending account-ID lock ordering to prevent deadlocks
-- `populate_existing=True` execution option to refresh ORM instances after lock acquisition (prevents SQLAlchemy identity-map staleness)
-- Balance checked after acquiring all locks, not before
-
-## Idempotency Semantics
-
-Every state-changing POST uses a client-generated UUID `Idempotency-Key` header:
-
-| Operation | Same key + same payload | Same key + different payload |
-|-----------|------------------------|------------------------------|
-| Direct transfer | 200 replay, no duplicate | 409 IDEMPOTENCY_KEY_REUSED |
-| Request creation | 200 replay | 409 IDEMPOTENCY_KEY_REUSED |
-| Request fulfillment | 200 replay (even after completion) | 409 IDEMPOTENCY_KEY_REUSED |
-
-## Database / Migrations
-
-- PostgreSQL with Alembic for schema evolution
-- Migration head: `0003_money_requests`
-- Tables: `accounts`, `transfers`, `money_requests`
-- Migrations are the authoritative schema management path
-
-### Running Migrations
-
-```bash
-# Apply to application database
-DATABASE_URL="postgresql://...pstu_money" python -m alembic upgrade head
-
-# Apply to test database
-DATABASE_URL="postgresql://...pstu_money_test" python -m alembic upgrade head
+problem.md     Approved problem interpretation
+plan.md        Approved engineering design
+execute.md     Verified implementation tracker
 ```
 
-## Running Locally
+## API Overview
 
-```bash
-# Create virtual environment
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/health` | Health check |
+| `POST` | `/api/auth/register` | Register account and issue bearer token |
+| `GET` | `/api/auth/me` | Read authenticated account and balance |
+| `GET` | `/api/users?query=...` | Search valid users |
+| `POST` | `/api/transfers` | Create direct transfer |
+| `POST` | `/api/requests` | Create money request |
+| `GET` | `/api/requests/incoming?status=pending` | List pending requests for current payer |
+| `POST` | `/api/requests/{request_id}/fulfill` | Fulfill pending request |
+
+## Local Setup
+
+Use Windows PowerShell from the repository root.
+
+```powershell
 python -m venv .venv
-.venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # Linux/Mac
-
-# Install dependencies
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+Copy-Item .env.example .env
+```
 
-# Configure environment
-cp .env.example .env
-# Edit .env with PostgreSQL URLs
+Edit `.env` with private local PostgreSQL credentials:
 
-# Apply migrations
+```env
+DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/money_movement_app
+TEST_DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/money_movement_app_test
+```
+
+The app and test databases must be different. The test database name must end with `_test`.
+
+Apply migrations and start the app:
+
+```powershell
 python -m alembic upgrade head
+python -m uvicorn backend.main:app --reload --port 8000
+```
 
-# Run the application
-python -m uvicorn backend.main:app --reload
+Open:
 
-# Open browser
-# http://127.0.0.1:8000/
+```text
+http://127.0.0.1:8000/
+```
+
+If port `8000` is unavailable, use another local port such as `8001`:
+
+```powershell
+python -m uvicorn backend.main:app --reload --port 8001
 ```
 
 ## Running Tests
 
-```bash
-python -m pytest tests/ -v
+```powershell
+python -m pytest tests -q
 ```
 
-Tests require a PostgreSQL test database (`pstu_money_test`). The `TEST_DATABASE_URL` environment variable must be set.
-
-**Final suite: 56 passed, 0 failed, 0 skipped**
-
-## Known MVP Limitations
-
-- No password login, account recovery, or token revocation
-- No request cancellation, rejection, expiry, or partial payment
-- No transaction history UI
-- No notifications or real-time updates
-- No rate limiting or admin tooling
-- No deployment (local demo only)
-- Bearer tokens are stored in browser localStorage (demo-grade security)
-
-## Project Structure
+Verified release result:
 
 ```text
-backend/
-  main.py              App composition, static UI, health endpoint
-  config.py            Environment-based configuration
-  database.py          SQLAlchemy engine/session setup
-  errors.py            Application error types
-  models/              SQLAlchemy persistence mappings
-  routes/              HTTP endpoints
-  schemas/             Pydantic request/response contracts
-  services/            Application operations and orchestration
-  logic/               Pure business logic (money parsing)
-frontend/
-  index.html           Same-origin responsive dashboard
-migrations/
-  versions/            Alembic schema migrations
-tests/                 Automated verification
+56 passed
+0 failed
+0 skipped
 ```
 
-## Documentation Map
+## Demo Walkthrough
 
-- `problem.md` — approved WHAT (requirements)
-- `plan.md` — approved HOW (Master System Design)
-- `execute.md` — live implementation status and evidence
-- `README.md` — this file (project-facing documentation)
-- actual code, tests, and migrations = implemented truth
+1. Register Alice.
+2. Register Bob.
+3. Switch to Alice and send Bob `2500.00`.
+4. Confirm Alice shows `97500.00` and Bob shows `102500.00`.
+5. Switch to Bob and request `1200.00` from Alice.
+6. Switch to Alice and view the incoming pending request.
+7. Fulfill the request.
+8. Confirm Alice shows `96300.00`, Bob shows `103700.00`, and the request is no longer pending.
+9. Refresh to demonstrate persisted state.
+
+## Important Engineering Decisions
+
+- Store money as integer paisa instead of floating-point values.
+- Derive financial authority from the authenticated bearer token.
+- Use database transactions for each accepted money movement.
+- Lock account rows with deterministic ordering for concurrent transfers.
+- Refresh ORM instances after lock waits to avoid stale balances.
+- Use idempotency keys across retries for all money-moving or state-creating POSTs.
+- Keep the frontend lightweight and backend-authoritative.
+- Avoid microservices, queues, distributed locks, and deployment complexity for this bounded MVP.
+
+## Verified State
+
+- Workstreams complete: WS-01 account/auth, WS-02 direct transfer, WS-03 request/fulfillment, WS-04 Golden Path integration, WS-05 release readiness
+- Alembic head: `0003_money_requests`
+- Full backend suite: `56 passed, 0 failed, 0 skipped`
+- Golden Path verified against PostgreSQL
+- Local browser UI served by FastAPI at `/`
+- Current release checkpoint includes the frontend retry-safety fix
+
+## Limitations And Future Work
+
+- No phone, password, OTP, or production login flow
+- Browser credentials stored in `localStorage`
+- No account recovery or token revocation
+- No request cancellation, rejection, expiry, editing, or partial payment
+- No transaction-history UI
+- No notifications or real-time updates
+- No rate limiting or admin tooling
+- No public production deployment
+- No browser E2E automation
+- No real money, bank, card, or payment-gateway integration
+- Database-level unique constraint on `transfers.linked_request_id` can be added as defense in depth
+
+## Event Context
+
+Built for PSTU National Hackathon 2026 as a local-demo software MVP. Public deployment is not required by the current repository release decision.
