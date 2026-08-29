@@ -23,6 +23,8 @@ Review should normally occur after the Builder workstream has been implemented, 
 
 3. Reviewer Bootstrap
 A fresh Reviewer must inspect, when relevant:
+For this PSTU repository, read `docs/event/PSTU_NATIONAL_HACKATHON_2026_RULES.md` before reviewing challenge work. Official PSTU rules and organizer clarifications outrank generic workflow guidance.
+
 - Official event rules and organizer clarifications
 - Official challenge or problem statement
 - AGENTS.md

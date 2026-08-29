@@ -4,6 +4,8 @@ A reusable, backend-first, full-stack-capable foundation for building small, dem
 
 Bring official event rules, organizer clarifications, and an authoritative problem statement. This template supplies repeatable engineering infrastructure; it does not decide the product or override competition policy.
 
+For this PSTU-specific repository, first read `docs/event/PSTU_NATIONAL_HACKATHON_2026_RULES.md`. It is the canonical event-governance overlay; the ignored local PDF remains at `docs/event/sources/National_Hackathon.pdf`.
+
 > This is a starting point, not a solution generator.
 
 ## What It Is
@@ -216,6 +218,7 @@ Those choices must come from official event rules, the official challenge/proble
 ## Documentation
 
 - [Quickstart](docs/guides/QUICKSTART.md)
+- [PSTU National Hackathon 2026 rules](docs/event/PSTU_NATIONAL_HACKATHON_2026_RULES.md)
 - [Workflow concepts](docs/guides/WORKFLOW.md)
 - [Prompt Playbook](docs/guides/PROMPT_PLAYBOOK.md)
 - [Full-stack guide](docs/guides/FULL_STACK_GUIDE.md)

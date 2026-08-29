@@ -4,6 +4,8 @@ This workflow enables a fresh Builder Agent chat to reconstruct project state fr
 
 2. Repository State Reconstruction
 Every fresh Builder workstream begins by reading or inspecting the following when present and relevant:
+For this PSTU repository, read `docs/event/PSTU_NATIONAL_HACKATHON_2026_RULES.md` before challenge work. It records the official rulebook interpretation and the boundary between PSTU rules and reusable engineering methodology.
+
 - Official event rules and organizer clarifications
 - Official challenge or problem statement
 - AGENTS.md

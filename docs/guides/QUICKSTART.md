@@ -6,6 +6,8 @@ Use this guide when a new hackathon brief arrives. The goal is to establish an e
 
 First inspect any official event rules or organizer clarifications. Reusable code, boilerplate, starter infrastructure, authentication components, UI libraries, AI-assisted development, deployment, and submission/code-freeze behavior must comply with those rules.
 
+For this PSTU repository, read `../event/PSTU_NATIONAL_HACKATHON_2026_RULES.md` before challenge intake. Keep `problem.md`, `plan.md`, `execute.md`, and `review.md` as challenge-ready templates until the official Challenge Document arrives.
+
 Use GitHub's **Use this template** option if the owner has enabled it, then clone the resulting repository. Alternatively:
 
 ```powershell

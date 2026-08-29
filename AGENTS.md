@@ -1,5 +1,8 @@
 AGENTS.md
 Stable engineering rules for this repository.
+
+PSTU event overlay: before challenge work in this repository, read `docs/event/PSTU_NATIONAL_HACKATHON_2026_RULES.md`. Official PSTU rules and official organizer clarifications outrank generic workflow guidance. Keep `problem.md`, `plan.md`, `execute.md`, and `review.md` challenge-ready until the official Challenge Document arrives.
+
 1. Repository Purpose
 This is a reusable hackathon engineering repository intended to be adapted to an authoritative problem statement.
 - Official event rules and organizer clarifications define competition constraints.

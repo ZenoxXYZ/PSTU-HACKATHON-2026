@@ -13,6 +13,7 @@ env/
 
 # Local configuration
 .env
+docs/event/sources/National_Hackathon.pdf
 
 # Local databases and logs
 *.db

@@ -2,6 +2,8 @@
 
 Use these prompts as copy/paste lifecycle handoffs. Replace bracketed placeholders. Each agent must read `AGENTS.md` and the governing workflow before acting. Planning prompts use Plan Mode; implementation begins only after explicit human approval.
 
+PSTU repository note: before challenge work, read `../event/PSTU_NATIONAL_HACKATHON_2026_RULES.md`. Treat it as the canonical event-governance overlay, and do not write pre-event governance into `problem.md`, `plan.md`, `execute.md`, or `review.md`.
+
 ## Essential Set Under Time Pressure
 
 Use the smallest sequence that protects the critical path:
