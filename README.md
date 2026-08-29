@@ -25,20 +25,20 @@ This is not a production banking system. It does not connect to real banks, card
 ## Golden Path
 
 ```text
-Alice starts: 100000.00
-Bob starts:   100000.00
+Zihan starts:   100000.00
+Ashfika starts: 100000.00
 
-Alice sends Bob 2500.00
-Alice:  97500.00
-Bob:   102500.00
+Zihan sends Ashfika 2500.00
+Zihan:    97500.00
+Ashfika: 102500.00
 
-Bob requests 1200.00 from Alice
+Ashfika requests 1200.00 from Zihan
 Request: PENDING
 Balances unchanged
 
-Alice fulfills the request
-Alice:  96300.00
-Bob:   103700.00
+Zihan fulfills the request
+Zihan:    96300.00
+Ashfika: 103700.00
 Request: COMPLETED
 
 Total conserved after account creation: 200000.00
@@ -84,11 +84,11 @@ Transfers use PostgreSQL `SELECT ... FOR UPDATE` through SQLAlchemy. Both affect
 Verified concurrency scenario:
 
 ```text
-Alice has BDT 1000.00
+Zihan has BDT 1000.00
 Two concurrent outgoing transfers attempt BDT 800.00 each
 Exactly one succeeds
 The other receives insufficient funds
-Alice ends at BDT 200.00
+Zihan ends at BDT 200.00
 ```
 
 ### Idempotency
@@ -212,14 +212,14 @@ Verified release result:
 
 ## Demo Walkthrough
 
-1. Register Alice.
-2. Register Bob.
-3. Switch to Alice and send Bob `2500.00`.
-4. Confirm Alice shows `97500.00` and Bob shows `102500.00`.
-5. Switch to Bob and request `1200.00` from Alice.
-6. Switch to Alice and view the incoming pending request.
+1. Register Zihan.
+2. Register Ashfika.
+3. Switch to Zihan and send Ashfika `2500.00`.
+4. Confirm Zihan shows `97500.00` and Ashfika shows `102500.00`.
+5. Switch to Ashfika and request `1200.00` from Zihan.
+6. Switch to Zihan and view the incoming pending request.
 7. Fulfill the request.
-8. Confirm Alice shows `96300.00`, Bob shows `103700.00`, and the request is no longer pending.
+8. Confirm Zihan shows `96300.00`, Ashfika shows `103700.00`, and the request is no longer pending.
 9. Refresh to demonstrate persisted state.
 
 ## Important Engineering Decisions
