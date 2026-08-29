@@ -107,9 +107,19 @@
     let selectedPayerHandle = null;
     let searchTimeout = null;
     let payerSearchTimeout = null;
+    let pendingSendOperation = null;
+    let pendingRequestOperation = null;
+    const pendingFulfillKeys = new Map();
 
     const $ = (id) => document.getElementById(id);
     const uuid = () => crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random()*16|0; return (c==='x'?r:(r&0x3|0x8)).toString(16); });
+
+    function retryKeyFor(pendingOperation, signature) {
+      if (!pendingOperation || pendingOperation.signature !== signature) {
+        return { signature, key: uuid() };
+      }
+      return pendingOperation;
+    }
 
     function saveAccounts() { localStorage.setItem('money_accounts', JSON.stringify(accounts)); }
     function saveCurrentHandle() { localStorage.setItem('money_current_handle', currentHandle || ''); }
@@ -175,6 +185,7 @@
       $('selected-recipient').classList.add('hidden');
       $('send-amount').value = '';
       $('btn-send').disabled = true;
+      pendingSendOperation = null;
       hideMessage('send-message');
       // Reset request section
       selectedPayerHandle = null;
@@ -183,6 +194,7 @@
       $('selected-payer').classList.add('hidden');
       $('request-amount').value = '';
       $('btn-request').disabled = true;
+      pendingRequestOperation = null;
       hideMessage('request-message');
       try {
         const res = await fetch(`${API}/auth/me`, { headers: { 'Authorization': `Bearer ${acc.token}` } });
@@ -214,6 +226,7 @@
               div.className = 'search-item' + (user.handle === selectedRecipientHandle ? ' selected' : '');
               div.textContent = `${user.display_name} (@${user.handle})`;
               div.addEventListener('click', () => {
+                if (selectedRecipientHandle !== user.handle) { pendingSendOperation = null; }
                 selectedRecipientHandle = user.handle;
                 $('selected-recipient').textContent = `→ ${user.display_name} (@${user.handle})`;
                 $('selected-recipient').classList.remove('hidden');
@@ -230,6 +243,7 @@
 
     // --- Send Money ---
     $('send-amount').addEventListener('input', () => {
+      pendingSendOperation = null;
       $('btn-send').disabled = !selectedRecipientHandle || !$('send-amount').value.trim();
     });
 
@@ -239,6 +253,7 @@
       if (!acc) return;
       const amount = $('send-amount').value.trim();
       if (!selectedRecipientHandle || !amount) { showMessage('send-message', 'Select a recipient and enter an amount.', 'error'); return; }
+      pendingSendOperation = retryKeyFor(pendingSendOperation, `${acc.handle}|${selectedRecipientHandle}|${amount}`);
       $('btn-send').disabled = true;
       $('btn-send').textContent = 'Sending...';
       try {
@@ -247,7 +262,7 @@
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${acc.token}`,
-            'Idempotency-Key': uuid()
+            'Idempotency-Key': pendingSendOperation.key
           },
           body: JSON.stringify({ recipient_handle: selectedRecipientHandle, amount })
         });
@@ -262,8 +277,10 @@
           $('send-amount').value = '';
           selectedRecipientHandle = null;
           $('selected-recipient').classList.add('hidden');
+          pendingSendOperation = null;
         } else {
           showMessage('send-message', data.message || 'Transfer failed.', 'error');
+          pendingSendOperation = null;
         }
       } catch (e) {
         showMessage('send-message', 'Network error.', 'error');
@@ -294,6 +311,7 @@
               div.className = 'search-item' + (user.handle === selectedPayerHandle ? ' selected' : '');
               div.textContent = `${user.display_name} (@${user.handle})`;
               div.addEventListener('click', () => {
+                if (selectedPayerHandle !== user.handle) { pendingRequestOperation = null; }
                 selectedPayerHandle = user.handle;
                 $('selected-payer').textContent = `→ ${user.display_name} (@${user.handle})`;
                 $('selected-payer').classList.remove('hidden');
@@ -310,6 +328,7 @@
 
     // --- Request Money ---
     $('request-amount').addEventListener('input', () => {
+      pendingRequestOperation = null;
       $('btn-request').disabled = !selectedPayerHandle || !$('request-amount').value.trim();
     });
 
@@ -319,6 +338,7 @@
       if (!acc) return;
       const amount = $('request-amount').value.trim();
       if (!selectedPayerHandle || !amount) { showMessage('request-message', 'Select a payer and enter an amount.', 'error'); return; }
+      pendingRequestOperation = retryKeyFor(pendingRequestOperation, `${acc.handle}|${selectedPayerHandle}|${amount}`);
       $('btn-request').disabled = true;
       $('btn-request').textContent = 'Requesting...';
       try {
@@ -327,7 +347,7 @@
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${acc.token}`,
-            'Idempotency-Key': uuid()
+            'Idempotency-Key': pendingRequestOperation.key
           },
           body: JSON.stringify({ payer_handle: selectedPayerHandle, amount })
         });
@@ -338,8 +358,10 @@
           $('request-amount').value = '';
           selectedPayerHandle = null;
           $('selected-payer').classList.add('hidden');
+          pendingRequestOperation = null;
         } else {
           showMessage('request-message', data.message || 'Request failed.', 'error');
+          pendingRequestOperation = null;
         }
       } catch (e) {
         showMessage('request-message', 'Network error.', 'error');
@@ -391,12 +413,15 @@
       btn.disabled = true;
       btn.textContent = 'Fulfilling...';
       hideMessage('request-list-message');
+      if (!pendingFulfillKeys.has(requestId)) {
+        pendingFulfillKeys.set(requestId, uuid());
+      }
       try {
         const res = await fetch(`${API}/requests/${requestId}/fulfill`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${acc.token}`,
-            'Idempotency-Key': uuid()
+            'Idempotency-Key': pendingFulfillKeys.get(requestId)
           }
         });
         const data = await res.json();
@@ -407,9 +432,11 @@
           const meData = await meRes.json();
           if (meRes.ok) { $('balance').textContent = meData.balance; }
           // Reload incoming requests
+          pendingFulfillKeys.delete(requestId);
           loadIncomingRequests();
         } else {
           showMessage('request-list-message', data.message || 'Fulfillment failed.', 'error');
+          pendingFulfillKeys.delete(requestId);
           btn.disabled = false;
           btn.textContent = 'Fulfill';
         }
